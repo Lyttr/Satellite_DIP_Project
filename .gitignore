@@ -32,7 +32,8 @@ collected_data/
 
 #model
 *.pth
-*.txt
+*.gitignore
+
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -213,3 +214,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+.gitignore

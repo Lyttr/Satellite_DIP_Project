@@ -1,0 +1,34 @@
+===== BASELINE(Original Images) RESULTS (subset classes) =====
+Class order: ['beach', 'buildings', 'forest', 'harbor', 'freeway']
+#Samples     = 250
+Accuracy     = 0.9720
+F1 (macro)   = 0.9720
+AUC (OVR)    = 0.9940
+
+===== Low Light RESULTS (subset classes) =====
+Class order: ['beach', 'buildings', 'forest', 'harbor', 'freeway']
+#Samples     = 250
+Accuracy     = 0.7960
+F1 (macro)   = 0.7957
+AUC (OVR)    = 0.9482
+
+===== logarithmic enhancement RESULTS (subset classes) =====
+Class order: ['beach', 'buildings', 'forest', 'harbor', 'freeway']
+#Samples     = 250
+Accuracy     = 0.8320
+F1 (macro)   = 0.8346
+AUC (OVR)    = 0.9707
+
+===== homomorphic enhancement RESULTS (subset classes) =====
+Class order: ['beach', 'buildings', 'forest', 'harbor', 'freeway']
+#Samples     = 250
+Accuracy     = 0.8840
+F1 (macro)   = 0.8830
+AUC (OVR)    = 0.9800
+
+===== homomorphic + logarithmic enhancement RESULTS (subset classes) =====
+Class order: ['beach', 'buildings', 'forest', 'harbor', 'freeway']
+#Samples     = 250
+Accuracy     = 0.8920
+F1 (macro)   = 0.8911
+AUC (OVR)    = 0.9852
