@@ -17,8 +17,8 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
-from models.model import *
-
+from models.model import *  
+from dip.dip_modules import DCT2D, RGBDCTTransform
 
 def set_seed(seed: int = 42):
     random.seed(seed)
@@ -27,7 +27,7 @@ def set_seed(seed: int = 42):
     torch.cuda.manual_seed_all(seed)
 
 
-device = torch.device( "cpu")
+device = torch.device("cpu")
 print("Using device:", device)
 
 parser = argparse.ArgumentParser()
@@ -37,11 +37,11 @@ parser.add_argument("--test_dir",  type=str, default="../../../data/test")
 parser.add_argument("--img_size",  type=int, default=64)
 parser.add_argument("--batch_size", type=int, default=128)
 parser.add_argument("--epochs",     type=int, default=50)
-parser.add_argument("--lr",         type=float, default=3e-4)
+parser.add_argument("--lr",         type=float, default=4e-4)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--seed",       type=int, default=42)
-parser.add_argument("--out_model",  type=str, default="best_resnet18_rgb.pth")
-parser.add_argument("--out_report", type=str, default="test_results.txt")
+parser.add_argument("--out_model",  type=str, default="best_resnet18_rgb_dct.pth")
+parser.add_argument("--out_report", type=str, default="test_results_dual.txt")
 parser.add_argument(
     "--keep_classes",
     type=str,
@@ -52,15 +52,11 @@ args = parser.parse_args()
 
 set_seed(args.seed)
 IMG_SIZE = args.img_size
-tf_train = transforms.Compose([
-    transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.ToTensor(),
-])
 
-tf_eval = transforms.Compose([
-    transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.ToTensor(),
-])
+
+
+tf_train = RGBDCTTransform(IMG_SIZE)
+tf_eval  = RGBDCTTransform(IMG_SIZE)
 
 
 def subset_imagefolder(dataset, keep_class_names):
@@ -83,7 +79,6 @@ def subset_imagefolder(dataset, keep_class_names):
     dataset.classes = new_classes
     dataset.class_to_idx = new_class_to_idx
     return dataset
-
 
 train_ds = datasets.ImageFolder(args.train_dir, transform=tf_train)
 val_ds   = datasets.ImageFolder(args.val_dir,   transform=tf_eval)
@@ -118,31 +113,32 @@ test_loader = DataLoader(
     num_workers=4,
     pin_memory=True,
 )
-
-model = ResNetClassifier(
+model = DualBranchModel(
     num_classes=num_classes,
-    pretrained=True,
-    freeze_backbone=True,
+    pretrained_rgb=True,
+    freeze_rgb=True,  
+    dct_out_dim=128,
     dropout=0.0,
 ).to(device)
+
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
 EPOCHS = args.epochs
 best_val_acc = 0.0
-
 for epoch in range(1, EPOCHS + 1):
     model.train()
     loss_sum = 0.0
     y_true_train, y_pred_train = [], []
 
-    for imgs, labels in tqdm(train_loader, desc=f"Epoch {epoch}/{EPOCHS} [train]"):
-        imgs = imgs.to(device, non_blocking=True)
-        labels = labels.to(device, non_blocking=True)
+    for (imgs_rgb, imgs_dct), labels in tqdm(train_loader, desc=f"Epoch {epoch}/{EPOCHS} [train]"):
+        imgs_rgb = imgs_rgb.to(device, non_blocking=True)
+        imgs_dct = imgs_dct.to(device, non_blocking=True)
+        labels   = labels.to(device, non_blocking=True)
 
         optimizer.zero_grad()
-        logits = model(imgs)
+        logits = model(imgs_rgb, imgs_dct)
         loss = criterion(logits, labels)
         loss.backward()
         optimizer.step()
@@ -153,14 +149,16 @@ for epoch in range(1, EPOCHS + 1):
 
     train_loss = loss_sum / len(train_loader)
     train_acc = accuracy_score(y_true_train, y_pred_train)
+
     model.eval()
     val_true, val_pred = [], []
     with torch.no_grad():
-        for imgs, labels in tqdm(val_loader, desc=f"Epoch {epoch}/{EPOCHS} [val]"):
-            imgs = imgs.to(device, non_blocking=True)
-            labels = labels.to(device, non_blocking=True)
+        for (imgs_rgb, imgs_dct), labels in tqdm(val_loader, desc=f"Epoch {epoch}/{EPOCHS} [val]"):
+            imgs_rgb = imgs_rgb.to(device, non_blocking=True)
+            imgs_dct = imgs_dct.to(device, non_blocking=True)
+            labels   = labels.to(device, non_blocking=True)
 
-            logits = model(imgs)
+            logits = model(imgs_rgb, imgs_dct)
             preds = logits.argmax(1)
 
             val_pred += preds.cpu().tolist()
@@ -176,12 +174,14 @@ for epoch in range(1, EPOCHS + 1):
         save_checkpoint(model, args.out_model)
         print(f"  -> New best model saved to: {args.out_model} (val_acc={best_val_acc:.4f})")
 
-best_model = ResNetClassifier(
+best_model = DualBranchModel(
     num_classes=num_classes,
-    pretrained=False,
-    freeze_backbone=False,
+    pretrained_rgb=True,
+    freeze_rgb=True,   
+    dct_out_dim=128,
     dropout=0.0,
 ).to(device)
+
 
 load_checkpoint(best_model, args.out_model, map_location=device)
 best_model.eval()
@@ -190,9 +190,11 @@ y_true, y_pred = [], []
 y_prob_rows = []
 
 with torch.no_grad():
-    for imgs, labels in tqdm(test_loader, desc="Testing"):
-        imgs = imgs.to(device, non_blocking=True)
-        logits = best_model(imgs)
+    for (imgs_rgb, imgs_dct), labels in tqdm(test_loader, desc="Testing"):
+        imgs_rgb = imgs_rgb.to(device, non_blocking=True)
+        imgs_dct = imgs_dct.to(device, non_blocking=True)
+
+        logits = best_model(imgs_rgb, imgs_dct)
         probs = torch.softmax(logits, dim=1).cpu().numpy()
         preds = logits.argmax(1).cpu().tolist()
 

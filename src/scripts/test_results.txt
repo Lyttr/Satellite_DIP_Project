@@ -1,10 +1,10 @@
 Test results (best model based on val_acc)
-Accuracy      : 0.944000
-F1 (macro)    : 0.943967
-AUC (OVR)     : 0.992660
-Best val_acc  : 0.936759
+Accuracy      : 0.952000
+F1 (macro)    : 0.951904
+AUC (OVR)     : 0.993380
+Best val_acc  : 0.940000
 Num classes   : 5
 Used classes  : ['beach', 'buildings', 'forest', 'harbor', 'freeway']
-Train dir     : ../../data/train
-Val dir       : ../../data/val
-Test dir      : ../../data/test
+Train dir     : ../../../data/train
+Val dir       : ../../../data/validation
+Test dir      : ../../../data/test

@@ -28,9 +28,9 @@ def main():
 
  
     parser.add_argument("--train_dir", type=str,
-                        default="../../collected_data/train")
+                        default="../../../train")
     parser.add_argument("--val_dir", type=str,
-                        default="../../collected_data/test")
+                        default="../../../test")
 
 
     parser.add_argument("--base_model", type=str,
@@ -179,11 +179,8 @@ def main():
               f"train_acc={train_acc:.4f}  "
               f"val_acc={val_acc:.4f}")
 
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            save_checkpoint(model, args.out_model)
-            print(f"New best finetuned model saved to: {args.out_model}, val_acc={best_val_acc:.4f}")
+       
 
-
+    save_checkpoint(model, args.out_model)
 if __name__ == "__main__":
     main()

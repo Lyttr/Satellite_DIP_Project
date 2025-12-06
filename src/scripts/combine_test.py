@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 import sys
-
+from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
@@ -11,8 +11,8 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
-from models.model import *
-from dip.dip_modules import clahe_rgb, bilateral_rgb, unsharp_rgb, highpass_rgb,laplacian_rgb
+from models.model import * 
+from dip.dip_modules import clahe_rgb, bilateral_rgb, unsharp_rgb, highpass_rgb,laplacian_rgb, DCT2D, RGBDCTTransform
 
 def main():
 
@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--test_dir", type=str,
                         default='../../../test')  
     parser.add_argument("--model_path", type=str,
-                        default="best_resnet18_rgb.pth")
+                        default="best_resnet18_rgb_dct.pth")
 
     parser.add_argument("--img_size", type=int, default=64)
     parser.add_argument("--batch_size", type=int, default=128)
@@ -41,20 +41,19 @@ def main():
     num_classes = len(target_classes)
 
     tf_eval = transforms.Compose([
+        
         transforms.Resize((args.img_size, args.img_size)),
-        #transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=8)), #Accuracy     = 0.5800 F1 (macro)   = 0.5834 AUC (OVR)    = 0.8508
+        #transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=6)), #Accuracy     = 0.5800 F1 (macro)   = 0.5834 AUC (OVR)    = 0.8508
         #transforms.Lambda(lambda im: bilateral_rgb(im,d=3,sigma_color=25,sigma_space=25)), 
-        transforms.Lambda(lambda im: unsharp_rgb(im, k=1, sigma=6)), #Accuracy     = 0.6150F1 (macro)   = 0.6192AUC (OVR)    = 0.8498
+        transforms.Lambda(lambda im: unsharp_rgb(im, k=3, sigma=6)), #Accuracy     = 0.6300F1 (macro)   = 0.6268AUC (OVR)    = 0.8873
         #transforms.Lambda(lambda im: highpass_rgb(im,alpha=0.4, ksize=3)),
-        #transforms.Lambda(lambda im: laplacian_rgb(im,alpha=0.3, ksize=1)),#transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=8)) Accuracy     = 0.6050F1 (macro)   = 0.5959AUC (OVR)    = 0.8535
-        # Accuracy     = 0.4800
-        # F1 (macro)   = 0.4720
-        # AUC (OVR)    = 0.7916
-        #finetune
-        # Accuracy     = 0.6100
-        # F1 (macro)   = 0.6039
-        # AUC (OVR)    = 0.8815
-        transforms.ToTensor(),
+        #transforms.Lambda(lambda im: laplacian_rgb(im,alpha=0.1, ksize=1)),#transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=6)) Accuracy     = 0.6300F1 (macro)   = 0.6302AUC (OVR)    = 0.8784
+        # Accuracy     = 0.4200
+        # F1 (macro)   = 0.3966
+        # AUC (OVR)    = 0.8021
+    
+    
+        RGBDCTTransform(args.img_size)
     ])
 
     full_test_ds = datasets.ImageFolder(args.test_dir, transform=tf_eval)
@@ -82,10 +81,11 @@ def main():
         test_ds, batch_size=args.batch_size,
         shuffle=False, num_workers=4, pin_memory=True
     )
-    model = ResNetClassifier(
+    model = DualBranchModel(
         num_classes=num_classes,
-        pretrained=False,
-        freeze_backbone=False,
+        pretrained_rgb=True,
+        freeze_rgb=True,  
+        dct_out_dim=128,
         dropout=0.0,
     ).to(device)
 
@@ -95,14 +95,16 @@ def main():
     print(f"Loaded model: {args.model_path}")
     y_true, y_pred, y_prob_rows = [], [], []
 
-    with torch.no_grad():
-        for imgs, labels in test_loader:
-            imgs = imgs.to(device)
-            logits = model(imgs)
 
+    with torch.no_grad():
+        for (imgs_rgb, imgs_dct), labels in tqdm(test_loader):
+            imgs_rgb = imgs_rgb.to(device, non_blocking=True)
+            imgs_dct = imgs_dct.to(device, non_blocking=True)
+    
+            logits = model(imgs_rgb, imgs_dct)
             probs = torch.softmax(logits, dim=1).cpu().numpy()
             preds = logits.argmax(1).cpu().tolist()
-
+    
             y_true += labels.tolist()
             y_pred += preds
             y_prob_rows += probs.tolist()

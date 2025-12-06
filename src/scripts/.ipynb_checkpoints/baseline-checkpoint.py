@@ -14,9 +14,12 @@ from tqdm import tqdm
 import numpy as np
 
 from PIL import Image  
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
-from models.model import build_resnet18, save_checkpoint, load_checkpoint
+from models.model import *
+
+
 def set_seed(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
@@ -24,13 +27,13 @@ def set_seed(seed: int = 42):
     torch.cuda.manual_seed_all(seed)
 
 
-device = torch.device("cpu")
+device = torch.device( "cpu")
 print("Using device:", device)
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--train_dir", type=str, default="../../data/train")
-parser.add_argument("--val_dir",   type=str, default="../../data/val")
-parser.add_argument("--test_dir",  type=str, default="../../data/test")
+parser.add_argument("--train_dir", type=str, default="../../../data/train")
+parser.add_argument("--val_dir",   type=str, default="../../../data/validation")
+parser.add_argument("--test_dir",  type=str, default="../../../data/test")
 parser.add_argument("--img_size",  type=int, default=64)
 parser.add_argument("--batch_size", type=int, default=128)
 parser.add_argument("--epochs",     type=int, default=50)
@@ -42,33 +45,26 @@ parser.add_argument("--out_report", type=str, default="test_results.txt")
 parser.add_argument(
     "--keep_classes",
     type=str,
-    default='beach,buildings,forest,harbor,freeway',
-    
+    default="beach,buildings,forest,harbor,freeway",
 )
 
 args = parser.parse_args()
 
 set_seed(args.seed)
 IMG_SIZE = args.img_size
-
 tf_train = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
-   
     transforms.ToTensor(),
 ])
 
 tf_eval = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.ToTensor()                 
+    transforms.ToTensor(),
 ])
 
 
 def subset_imagefolder(dataset, keep_class_names):
-
-
     orig_classes = list(dataset.classes)
-
- 
     new_classes = list(keep_class_names)
     new_class_to_idx = {c: i for i, c in enumerate(new_classes)}
 
@@ -86,20 +82,18 @@ def subset_imagefolder(dataset, keep_class_names):
     dataset.targets = new_targets
     dataset.classes = new_classes
     dataset.class_to_idx = new_class_to_idx
-
     return dataset
+
+
 train_ds = datasets.ImageFolder(args.train_dir, transform=tf_train)
 val_ds   = datasets.ImageFolder(args.val_dir,   transform=tf_eval)
 test_ds  = datasets.ImageFolder(args.test_dir,  transform=tf_eval)
 
-
 keep_cls_list = [c.strip() for c in args.keep_classes.split(",") if c.strip()]
-
 
 train_ds = subset_imagefolder(train_ds, keep_cls_list)
 val_ds   = subset_imagefolder(val_ds,   keep_cls_list)
 test_ds  = subset_imagefolder(test_ds,  keep_cls_list)
-
 
 num_classes = len(train_ds.classes)
 
@@ -108,28 +102,28 @@ train_loader = DataLoader(
     batch_size=args.batch_size,
     shuffle=True,
     num_workers=4,
-    pin_memory=True
+    pin_memory=True,
 )
 val_loader = DataLoader(
     val_ds,
     batch_size=args.batch_size,
     shuffle=False,
     num_workers=4,
-    pin_memory=True
+    pin_memory=True,
 )
 test_loader = DataLoader(
     test_ds,
     batch_size=args.batch_size,
     shuffle=False,
     num_workers=4,
-    pin_memory=True
+    pin_memory=True,
 )
 
-model = build_resnet18(
+model = ResNetClassifier(
     num_classes=num_classes,
     pretrained=True,
-    dropout=0.0,
     freeze_backbone=True,
+    dropout=0.0,
 ).to(device)
 
 criterion = nn.CrossEntropyLoss()
@@ -137,6 +131,7 @@ optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight
 
 EPOCHS = args.epochs
 best_val_acc = 0.0
+
 for epoch in range(1, EPOCHS + 1):
     model.train()
     loss_sum = 0.0
@@ -175,22 +170,24 @@ for epoch in range(1, EPOCHS + 1):
 
     print(f"Epoch {epoch}: train_loss={train_loss:.4f}  "
           f"train_acc={train_acc:.4f}  val_acc={val_acc:.4f}")
+
     if val_acc > best_val_acc:
         best_val_acc = val_acc
         save_checkpoint(model, args.out_model)
         print(f"  -> New best model saved to: {args.out_model} (val_acc={best_val_acc:.4f})")
-best_model = build_resnet18(
+
+best_model = ResNetClassifier(
     num_classes=num_classes,
-    pretrained=False,     
+    pretrained=False,
+    freeze_backbone=False,
     dropout=0.0,
-    freeze_backbone=False
 ).to(device)
 
 load_checkpoint(best_model, args.out_model, map_location=device)
 best_model.eval()
 
 y_true, y_pred = [], []
-y_prob_rows = []  # [N, C]
+y_prob_rows = []
 
 with torch.no_grad():
     for imgs, labels in tqdm(test_loader, desc="Testing"):
@@ -206,13 +203,14 @@ with torch.no_grad():
 y_prob = np.array(y_prob_rows)
 
 acc = accuracy_score(y_true, y_pred)
-f1  = f1_score(y_true, y_pred, average='macro')
-auc = roc_auc_score(y_true, y_prob, multi_class='ovr')
+f1  = f1_score(y_true, y_pred, average="macro")
+auc = roc_auc_score(y_true, y_prob, multi_class="ovr")
 
 print(f"\nTest Results:")
 print(f"  Acc      = {acc:.4f}")
 print(f"  F1(macro)= {f1:.4f}")
 print(f"  AUC(OVR) = {auc:.4f}")
+
 with open(args.out_report, "w") as f:
     f.write("Test results (best model based on val_acc)\n")
     f.write(f"Accuracy      : {acc:.6f}\n")

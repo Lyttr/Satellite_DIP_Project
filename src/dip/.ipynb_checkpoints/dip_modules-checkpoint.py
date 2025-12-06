@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 from PIL import Image 
+import torch
+import torch.nn as nn
+from torchvision import datasets, transforms
 def clahe_rgb(img_pil, clip=2.0, tile=8):
 
     img = np.array(img_pil.convert("RGB"), dtype=np.uint8)
@@ -32,3 +35,61 @@ def unsharp_rgb(img_pil, k=0.6, sigma=1.0):
     out = cv2.addWeighted(img, 1.0 + float(k), blur, -float(k), 0)
     out = np.clip(out, 0, 255).astype(np.uint8)
     return Image.fromarray(out)
+def highpass_rgb(img_pil, alpha=1.0, ksize=3):
+    img = np.array(img_pil.convert("RGB"), dtype=np.float32)
+    ksize = int(ksize)
+    kernel = -1.0 * np.ones((ksize, ksize), dtype=np.float32)
+    kernel[ksize // 2, ksize // 2] = (ksize * ksize) - 1.0 
+    high = cv2.filter2D(img, ddepth=-1, kernel=kernel)
+    out = img + float(alpha) * high
+    out = np.clip(out, 0, 255).astype(np.uint8)
+    return Image.fromarray(out)
+def laplacian_rgb(img_pil, alpha=0.3, ksize=3):
+    img = np.array(img_pil.convert("RGB"), dtype=np.float32)
+    ksize = int(ksize)
+    lap = cv2.Laplacian(img, ddepth=cv2.CV_32F, ksize=ksize)
+    out = img - float(alpha) * lap
+    out = np.clip(out, 0, 255).astype(np.uint8)
+    return Image.fromarray(out)
+class DCT2D(nn.Module):
+    def __init__(self, N: int):
+        super().__init__()
+        self.N = N
+
+        C = torch.zeros(N, N, dtype=torch.float32)
+        for k in range(N):
+            for n in range(N):
+                alpha = (1.0 / N) ** 0.5 if k == 0 else (2.0 / N) ** 0.5
+                theta = torch.tensor(torch.pi * (n + 0.5) * k / N, dtype=torch.float32)
+                C[k, n] = alpha * torch.cos(theta)
+
+        self.register_buffer("C", C)  # [N, N]
+
+    def forward(self, y: torch.Tensor) -> torch.Tensor:
+        C = self.C
+        return C @ y @ C.t()
+
+
+class RGBDCTTransform:
+    def __init__(self, img_size: int):
+        self.resize = transforms.Resize((img_size, img_size))
+        self.to_tensor = transforms.ToTensor()
+        self.dct2d = DCT2D(img_size)
+
+    def __call__(self, img_pil: Image.Image):
+        img_pil = img_pil.convert("RGB")
+        rgb = self.to_tensor(self.resize(img_pil))  
+
+        
+        r, g, b = rgb[0], rgb[1], rgb[2]
+        y = 0.299 * r + 0.587 * g + 0.114 * b      # [H,W]
+
+        dct_y = self.dct2d(y)                      # [H,W]
+        dct_y = dct_y.abs()
+        dct_y = torch.log1p(dct_y)                 # log(1+|F|)
+
+        dct_y = dct_y - dct_y.min()
+        dct_y = dct_y / (dct_y.max() + 1e-8)
+        dct = dct_y.unsqueeze(0)                   # [1,H,W]
+
+        return rgb, dct

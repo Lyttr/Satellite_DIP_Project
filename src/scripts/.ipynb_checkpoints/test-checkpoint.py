@@ -11,16 +11,16 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
-from models.model import build_resnet18, load_checkpoint
-from dip.dip_modules import clahe_rgb, bilateral_rgb, unsharp_rgb
+from models.model import *
+from dip.dip_modules import clahe_rgb, bilateral_rgb, unsharp_rgb, highpass_rgb,laplacian_rgb
 
 def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--test_dir", type=str,
-                        default='../../collected_data/test')  
+                        default='../../../test')  
     parser.add_argument("--model_path", type=str,
-                        default="finetuned_resnet18_rgb.pth")
+                        default="best_resnet18_rgb.pth")
 
     parser.add_argument("--img_size", type=int, default=64)
     parser.add_argument("--batch_size", type=int, default=128)
@@ -42,16 +42,18 @@ def main():
 
     tf_eval = transforms.Compose([
         transforms.Resize((args.img_size, args.img_size)),
-        #transforms.Lambda(lambda im: clahe_rgb(im, clip=2.0, tile=6)), #Accuracy     = 0.6300 F1 (macro)   = 0.6326 AUC (OVR)    = 0.8868
+        #transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=8)), #Accuracy     = 0.5800 F1 (macro)   = 0.5834 AUC (OVR)    = 0.8508
         #transforms.Lambda(lambda im: bilateral_rgb(im,d=3,sigma_color=25,sigma_space=25)), 
-        #transforms.Lambda(lambda im: unsharp_rgb(im, k=1, sigma=7)), #Accuracy     = 0.6600F1 (macro)   = 0.6553AUC (OVR)    = 0.8902
-        # Accuracy     = 0.4950
-        # F1 (macro)   = 0.4723
-        # AUC (OVR)    = 0.8477
+        transforms.Lambda(lambda im: unsharp_rgb(im, k=1, sigma=6)), #Accuracy     = 0.6150F1 (macro)   = 0.6192AUC (OVR)    = 0.8498
+        #transforms.Lambda(lambda im: highpass_rgb(im,alpha=0.4, ksize=3)),
+        #transforms.Lambda(lambda im: laplacian_rgb(im,alpha=0.3, ksize=1)),#transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=8)) Accuracy     = 0.6050F1 (macro)   = 0.5959AUC (OVR)    = 0.8535
+        # Accuracy     = 0.4800
+        # F1 (macro)   = 0.4720
+        # AUC (OVR)    = 0.7916
         #finetune
-        # Accuracy     = 0.6200
-        # F1 (macro)   = 0.6140
-        # AUC (OVR)    = 0.8812
+        # Accuracy     = 0.6100
+        # F1 (macro)   = 0.6039
+        # AUC (OVR)    = 0.8815
         transforms.ToTensor(),
     ])
 
@@ -80,11 +82,11 @@ def main():
         test_ds, batch_size=args.batch_size,
         shuffle=False, num_workers=4, pin_memory=True
     )
-    model = build_resnet18(
+    model = ResNetClassifier(
         num_classes=num_classes,
         pretrained=False,
+        freeze_backbone=False,
         dropout=0.0,
-        freeze_backbone=False
     ).to(device)
 
     load_checkpoint(model, args.model_path, map_location=device)
