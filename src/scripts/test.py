@@ -12,7 +12,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
 from models.model import *
-from dip.dip_modules import clahe_rgb, bilateral_rgb, unsharp_rgb, highpass_rgb,laplacian_rgb
+from dip.dip_modules import clahe_rgb, bilateral_rgb, unsharp_rgb, highpass_rgb,laplacian_rgb,dark_channel_rgb
 
 def main():
 
@@ -44,7 +44,8 @@ def main():
         transforms.Resize((args.img_size, args.img_size)),
         #transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=8)), #Accuracy     = 0.5800 F1 (macro)   = 0.5834 AUC (OVR)    = 0.8508
         #transforms.Lambda(lambda im: bilateral_rgb(im,d=3,sigma_color=25,sigma_space=25)), 
-        transforms.Lambda(lambda im: unsharp_rgb(im, k=1, sigma=6)), #Accuracy     = 0.6150F1 (macro)   = 0.6192AUC (OVR)    = 0.8498
+        transforms.Lambda(lambda im: dark_channel_rgb(im, krnl_ratio=0.04, min_atmos_light=200)),#Accuracy     = 0.5400F1 (macro)   = 0.5417AUC (OVR)    = 0.8244
+        #transforms.Lambda(lambda im: unsharp_rgb(im, k=1, sigma=6)), #Accuracy     = 0.6150F1 (macro)   = 0.6192AUC (OVR)    = 0.8498
         #transforms.Lambda(lambda im: highpass_rgb(im,alpha=0.4, ksize=3)),
         #transforms.Lambda(lambda im: laplacian_rgb(im,alpha=0.3, ksize=1)),#transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=8)) Accuracy     = 0.6050F1 (macro)   = 0.5959AUC (OVR)    = 0.8535
         # Accuracy     = 0.4800

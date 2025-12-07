@@ -40,8 +40,8 @@ parser.add_argument("--epochs",     type=int, default=50)
 parser.add_argument("--lr",         type=float, default=4e-4)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--seed",       type=int, default=42)
-parser.add_argument("--out_model",  type=str, default="best_resnet18_rgb_dct.pth")
-parser.add_argument("--out_report", type=str, default="test_results_dual.txt")
+parser.add_argument("--out_model",  type=str, default="best_densenet_rgb_dct.pth")
+parser.add_argument("--out_report", type=str, default="test_results_rgb_dct_resnet50.txt")
 parser.add_argument(
     "--keep_classes",
     type=str,
@@ -115,6 +115,7 @@ test_loader = DataLoader(
 )
 model = DualBranchModel(
     num_classes=num_classes,
+    rgb_backbone_type='DenseNet121',
     pretrained_rgb=True,
     freeze_rgb=True,  
     dct_out_dim=128,
@@ -176,6 +177,7 @@ for epoch in range(1, EPOCHS + 1):
 
 best_model = DualBranchModel(
     num_classes=num_classes,
+    rgb_backbone_type='DenseNet121',
     pretrained_rgb=True,
     freeze_rgb=True,   
     dct_out_dim=128,

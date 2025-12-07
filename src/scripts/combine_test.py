@@ -12,7 +12,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
 from models.model import * 
-from dip.dip_modules import clahe_rgb, bilateral_rgb, unsharp_rgb, highpass_rgb,laplacian_rgb, DCT2D, RGBDCTTransform
+from dip.dip_modules import clahe_rgb, bilateral_rgb, unsharp_rgb, highpass_rgb,laplacian_rgb, DCT2D, RGBDCTTransform,dark_channel_rgb
 
 def main():
 
@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--test_dir", type=str,
                         default='../../../test')  
     parser.add_argument("--model_path", type=str,
-                        default="best_resnet18_rgb_dct.pth")
+                        default="best_densenet_rgb_dct.pth")
 
     parser.add_argument("--img_size", type=int, default=64)
     parser.add_argument("--batch_size", type=int, default=128)
@@ -45,8 +45,9 @@ def main():
         transforms.Resize((args.img_size, args.img_size)),
         #transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=6)), #Accuracy     = 0.5800 F1 (macro)   = 0.5834 AUC (OVR)    = 0.8508
         #transforms.Lambda(lambda im: bilateral_rgb(im,d=3,sigma_color=25,sigma_space=25)), 
-        transforms.Lambda(lambda im: unsharp_rgb(im, k=3, sigma=6)), #Accuracy     = 0.6300F1 (macro)   = 0.6268AUC (OVR)    = 0.8873
+        #transforms.Lambda(lambda im: unsharp_rgb(im, k=3, sigma=6)), #Accuracy     = 0.6300F1 (macro)   = 0.6268AUC (OVR)    = 0.8873
         #transforms.Lambda(lambda im: highpass_rgb(im,alpha=0.4, ksize=3)),
+        transforms.Lambda(lambda im: dark_channel_rgb(im, krnl_ratio=0.04, min_atmos_light=200)),#Accuracy     = 0.5650F1 (macro)   = 0.5602AUC (OVR)    = 0.8637
         #transforms.Lambda(lambda im: laplacian_rgb(im,alpha=0.1, ksize=1)),#transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=6)) Accuracy     = 0.6300F1 (macro)   = 0.6302AUC (OVR)    = 0.8784
         # Accuracy     = 0.4200
         # F1 (macro)   = 0.3966
@@ -84,6 +85,7 @@ def main():
     model = DualBranchModel(
         num_classes=num_classes,
         pretrained_rgb=True,
+        rgb_backbone_type='DenseNet121',
         freeze_rgb=True,  
         dct_out_dim=128,
         dropout=0.0,

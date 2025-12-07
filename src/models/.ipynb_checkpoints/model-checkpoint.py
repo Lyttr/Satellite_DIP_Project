@@ -22,8 +22,46 @@ class ResNet18Backbone(nn.Module):
         x = self.body(x)       # [B, 512, 1, 1]
         x = x.view(x.size(0), -1)  # [B, 512]
         return x
+class ResNet50Backbone(nn.Module):
+    def __init__(self, pretrained: bool = True, freeze_backbone: bool = False):
+        super().__init__()
+        try:
+            weights = models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None
+            net = models.resnet50(weights=weights)
+        except:
+            net = models.resnet50(pretrained=pretrained)
+        self.body = nn.Sequential(*list(net.children())[:-1]) 
+        self.out_dim = net.fc.in_features  # 2048
+        if freeze_backbone:
+            for p in self.body.parameters():
+                p.requires_grad = False
+    def forward(self, x):
+        x = self.body(x)         
+        x = x.view(x.size(0), -1) 
+        return x
+class DenseNet121Backbone(nn.Module):
+    def __init__(self, pretrained: bool = True, freeze_backbone: bool = False):
+        super().__init__()
+        try:
+            weights = models.DenseNet121_Weights.IMAGENET1K_V1 if pretrained else None
+            net = models.densenet121(weights=weights)
+        except:
+            net = models.densenet121(pretrained=pretrained)
+        self.body = nn.Sequential(
+            net.features,
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d((1, 1)),
+        )
+        self.out_dim = net.classifier.in_features  
 
+        if freeze_backbone:
+            for p in self.body.parameters():
+                p.requires_grad = False
 
+    def forward(self, x):
+        x = self.body(x)            
+        x = x.view(x.size(0), -1)   
+        return x
 class ClassificationHead(nn.Module):
     def __init__(self, in_feats: int, num_classes: int, dropout: float = 0.0):
         super().__init__()
@@ -97,6 +135,7 @@ class DualBranchModel(nn.Module):
     def __init__(
         self,
         num_classes: int,
+        rgb_backbone_type: str = "resnet18",
         pretrained_rgb: bool = True,
         freeze_rgb: bool = True,
         dct_out_dim: int = 128,
@@ -104,15 +143,26 @@ class DualBranchModel(nn.Module):
     ):
         super().__init__()
 
-        self.rgb_backbone = ResNet18Backbone(
+        if rgb_backbone_type == "resnet18":
+            self.rgb_backbone = ResNet18Backbone(
+                pretrained=pretrained_rgb,
+                freeze_backbone=freeze_rgb,
+            ) 
+        elif rgb_backbone_type == "resnet50":
+            self.rgb_backbone = ResNet50Backbone(
             pretrained=pretrained_rgb,
             freeze_backbone=freeze_rgb,
-        ) 
+            )
+        elif rgb_backbone_type == "DenseNet121":
+            self.rgb_backbone = DenseNet121Backbone(
+            pretrained=pretrained_rgb,
+            freeze_backbone=freeze_rgb,
+            )
         self.dct_backbone = DCTCNN(
             in_channels=1,
             out_dim=dct_out_dim,
         )
-
+        
         fusion_dim = self.rgb_backbone.out_dim + self.dct_backbone.out_dim  # 512 + 128
         self.head = ClassificationHead(
             in_feats=fusion_dim,
