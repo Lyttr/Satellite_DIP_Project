@@ -13,7 +13,26 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
 from models.model import * 
 from dip.dip_modules import clahe_rgb, bilateral_rgb, unsharp_rgb, highpass_rgb,laplacian_rgb, DCT2D, RGBDCTTransform,dark_channel_rgb
-
+def get_dip_transform(algo: str):
+    if algo == "None":
+        return transforms.Lambda(lambda im: im)
+    elif algo == "CLAHE_Lap":
+        return transforms.Compose([
+            transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=6)),
+            transforms.Lambda(lambda im: laplacian_rgb(im, alpha=0.1, ksize=1)),
+        ])
+    elif algo == "USM":
+        return transforms.Lambda(
+            lambda im: unsharp_rgb(im, k=3, sigma=6)
+        )
+    elif algo == "DCP":
+        return transforms.Lambda(
+            lambda im: dark_channel_rgb(
+                im,
+                krnl_ratio=0.04,
+                min_atmos_light=200
+            )
+        )
 def main():
 
     parser = argparse.ArgumentParser()
@@ -21,7 +40,7 @@ def main():
                         default='../../../test')  
     parser.add_argument("--model_path", type=str,
                         default="best_densenet_rgb_dct.pth")
-
+    parser.add_argument("--algo",type=str,default="None",choices=["None", "CLAHE_Lap", "USM", "DCP"])
     parser.add_argument("--img_size", type=int, default=64)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument(
@@ -39,19 +58,11 @@ def main():
     target_classes = [c.strip() for c in args.class_order.split(",") if c.strip()]
     class_to_idx = {c: i for i, c in enumerate(target_classes)}
     num_classes = len(target_classes)
-
+    dip_tf = get_dip_transform(args.algo)
     tf_eval = transforms.Compose([
         
         transforms.Resize((args.img_size, args.img_size)),
-        #transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=6)), #Accuracy     = 0.5800 F1 (macro)   = 0.5834 AUC (OVR)    = 0.8508
-        #transforms.Lambda(lambda im: bilateral_rgb(im,d=3,sigma_color=25,sigma_space=25)), 
-        #transforms.Lambda(lambda im: unsharp_rgb(im, k=3, sigma=6)), #Accuracy     = 0.6300F1 (macro)   = 0.6268AUC (OVR)    = 0.8873
-        #transforms.Lambda(lambda im: highpass_rgb(im,alpha=0.4, ksize=3)),
-        transforms.Lambda(lambda im: dark_channel_rgb(im, krnl_ratio=0.04, min_atmos_light=200)),#Accuracy     = 0.5650F1 (macro)   = 0.5602AUC (OVR)    = 0.8637
-        #transforms.Lambda(lambda im: laplacian_rgb(im,alpha=0.1, ksize=1)),#transforms.Lambda(lambda im: clahe_rgb(im, clip=1, tile=6)) Accuracy     = 0.6300F1 (macro)   = 0.6302AUC (OVR)    = 0.8784
-        # Accuracy     = 0.4200
-        # F1 (macro)   = 0.3966
-        # AUC (OVR)    = 0.8021
+        dip_tf, 
     
     
         RGBDCTTransform(args.img_size)
