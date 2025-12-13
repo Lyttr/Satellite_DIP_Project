@@ -25,9 +25,9 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-*/.ipynb_checkpoints
+.ipynb_checkpoints/
 *.ipynb
-*/__pycache__
+
 #dataset
 data/
 collected_data/
