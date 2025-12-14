@@ -56,7 +56,9 @@ data/
     ├── class2/
     └── ...
 ```
+## Resources
 
+Model weights and datasets are available on [Google Drive](https://drive.google.com/drive/folders/1dngR6mZtThR68G4ITfK4pOxIQgQFczPw?usp=sharing).
 ## Usage
 
 ### Training spatial-only Model
